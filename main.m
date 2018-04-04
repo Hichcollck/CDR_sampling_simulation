@@ -59,7 +59,7 @@ while z_i<=z_float  % Analysis only up to 1000 meters above sea level.
     [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
     V_bag(i) = m_air/d(i)*1000; % [L]
     
-    Qp(i)=1; % [L/min] constant value
+    Qp(i)=3; % [L/min] constant value
     if i>1
         z(i)=z_i;
         v_th(i)=5.5; % [m/s] aproximately constant
