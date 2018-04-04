@@ -53,7 +53,7 @@ C = (Cd_p*A_p+Cd_g*A_g)/m_g;     % Dynamic constant
 m_air = (V_min/1000)*d_sealvl;   % [kg] Minimum amount of air to be collected by the bags
 
 %% Processing
-%%------------------- Ascent phase algorithm-------------------------------
+%%------------------- Ascent phase algorithm ------------------------------
 if phase==1
 z(1)=z_ini;       % Height vector definition
 z_i=z_ini;        % auxiliary copy of z variable
@@ -68,7 +68,7 @@ while z_i<=z_float  % Analysis only up to 1000 meters above sea level.
     [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
     V_bag(i) = m_air/d(i)*1000; % [L]
     
-    Qp(i)=3; % [L/min] constant value
+    Qp(i)=1; % [L/min] constant value
     if i>1
         z(i)=z_i;
         v_th(i)=5.5; % [m/s] aproximately constant
@@ -125,7 +125,8 @@ while z_i<=z_float  % Analysis only up to 1000 meters above sea level.
     i=i+1;
     z_i=z(i-1)+2;    % (Meshing) Analysis each 2 meters.
 end
-% Descent phase algorithm
+
+%%----------------- Descent phase algorithm -------------------------------
 elseif phase==2
 z(1)=z_cutoff;     % Height vector definition
 z_i=z_cutoff;      % auxiliary copy of z variable
