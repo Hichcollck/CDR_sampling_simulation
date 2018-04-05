@@ -31,7 +31,7 @@ phase = 2;           % ascent = 1; descent = 2;
 z_float = 30000;     % [m] Float altitude
 z_ini = 20000;       % [m] Initial height to start sampling
     % If descent phase
-z_cutoff = 27720;    % [m] Cut-off altitude
+z_cutoff = 40000;    % [m] Cut-off altitude
 z_end = 10000;       % [m] Final height where the sampling stops
 % Sampling equipment
 V_min = 0.2;         % [L] Minimum volume to collect with the bags at sea lvl
@@ -141,13 +141,13 @@ while z_i>=z_end  % Analysis only up to 1000 meters above sea level.
     [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
     V_bag(i) = m_air/d(i)*1000; % [L]
     
-    Qp(i)=1; % [L/min] constant value
+     Qp(i)=1; % [L/min] constant value
     if i>1
         z(i)=z_i;
         [v_th(i),a_th(i),time(i),dt(i)]=free_fall_dynamics(i, z, v_th, a_th, time, d(i), C);
         
 %         p_total(i)=p(i)+(0.5*d(i)*(v_th(i))^2)/100; % [mbar] Dynamic pressure
-%         [Qp(i)]=pump_flowrate(p_total(i)); % [L/min] flowrate profile depending on pump efficiency  
+%         [Qp(i)]=pump_flowrate(p(i)); % [L/min] flowrate profile depending on pump efficiency  
         
         V_sample(i)=Qp(i)*dt(i)/60; % [L]
         V_total(i)=V_total(i-1)+V_sample(i); % [L]
@@ -199,8 +199,9 @@ end
 
 %% Post-processing (Sampling Strategy)
 
-
-
+% for i=1:length(num_bags)
+%     z_bags(i)
+% end
 
 %% Output plotting
 
@@ -256,5 +257,7 @@ ylabel('Altitude [km]')
 legend('Sampling Bag Pressure','Maximum Bag Pressure')
 hold off
 
+%% 
+save('sampling_simulation_data.mat')
 
 
