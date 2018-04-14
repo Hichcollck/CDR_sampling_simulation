@@ -32,7 +32,7 @@ z_float = 30000;     % [m] Float altitude
 z_ini = 20000;       % [m] Initial height to start sampling
     % If descent phase
 z_cutoff = 26000;    % [m] Cut-off altitude
-z_end = 1000;       % [m] Final height where the sampling stops
+z_end = 10000;       % [m] Final height where the sampling stops
 % Sampling equipment
 V_min = 0.2;         % [L] Minimum volume to collect with the bags at sea lvl
 bag_volume = 3;      % [L] Physical volume of the chosen bags
@@ -41,7 +41,7 @@ p_bag_max = 137.895; % [mbar] Maximum pressure stand by the bags (2psi)
 %   num_bags = 7;        % Number of bags used in the experiment
 %   z_bags = [, , , , , , , ]; % [m] Opening height of each bag
 % Gondola
-m_g = 250;         % [kg] Mass in DESCENT (gondola + parachute + all extra equipment)
+m_g = 190;           % [kg] Mass in DESCENT (gondola + parachute + all extra equipment)
 A_g = 1.3456;        % [m^2] Bottom area (characteristic value for aerodynamic forces)
 Cd_g = 1.05;         % Drag coefficient (Typical for a cube shape)
 % Parachute
@@ -197,9 +197,13 @@ while z_i>=z_end  % Analysis only up to 1000 meters above sea level.
 end
 end
 
-%% Post-processing (Sampling Strategy)
+%%-------------------------- SSC Algorithm --------------------------------
 
-% for i=1:length(num_bags)
+% [z_SSC, v_SSC, time_SSC]=SSC_algorithm(m_g, z_cutoff, z_end);
+
+%% Post-processing (Sampling Strategy)
+ 
+% for i=1:num_bags
 %     z_bags(i)
 % end
 
@@ -219,6 +223,11 @@ figure('Name','altitude vs. time')
 plot(time/60, z/1000)
 xlabel('Time [min]')
 ylabel('Altitude [km]')
+
+% figure('Name','SSC altitude vs. time')
+% plot(time_SSC/60, z_SSC/1000)
+% xlabel('Time [min]')
+% ylabel('Altitude [km]')
 
 figure('Name','Pump performance')
 plot(Qp, z/1000)
@@ -258,6 +267,6 @@ legend('Sampling Bag Pressure','Maximum Bag Pressure')
 hold off
 
 %% Saving the workspace for "pre_graphs.m" main inputs
-save('250kg_simulation.mat')
+% save('250kg_simulation.mat')
 
 
