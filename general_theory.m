@@ -16,10 +16,11 @@ clear all
 close all
 clc
 
-global R_spc g d_sealvl
+global R_spc R_ideal g d_sealvl
 
 %% Constants
 R_spc = 287.058;    % [J·kg^-1·K^-1] Specific ideal gas constant for dry air
+R_ideal = 8314;    % Ideal gas constant
 g = 9.81;           % [m/s^2] gravity
 d_sealvl = 1.225;   % [kg/m^3] Air density at sea level
 
@@ -28,20 +29,21 @@ d_sealvl = 1.225;   % [kg/m^3] Air density at sea level
 % Flight characteristics
 phase = 2;           % ascent = 1; descent = 2; 
     % If ascent phase
-z_float = 30000;     % [m] Float altitude
-z_ini = 20000;       % [m] Initial height to start sampling
+z_float = 26000;     % [m] Float altitude
+z_ini = 18000;       % [m] Initial height to start sampling
     % If descent phase
 z_cutoff = 26000;    % [m] Cut-off altitude
-z_end = 10000;       % [m] Final height where the sampling stops
+z_end = 12000;       % [m] Final height where the sampling stops
 % Sampling equipment
-V_min = 0.2;         % [L] Minimum volume to collect with the bags at sea lvl
+V_min = 0.4;         % [L] (180mL) Minimum volume to collect with the bags at sea lvl
 bag_volume = 3;      % [L] Physical volume of the chosen bags
 p_bag_max = 137.895; % [mbar] Maximum pressure stand by the bags (2psi)
+flushing_time = 60;  % [sec] Time required to flush the system between the sampling of two bags
 % Sampling strategy
-%   num_bags = 7;        % Number of bags used in the experiment
-%   z_bags = [, , , , , , , ]; % [m] Opening height of each bag
+num_bags = 6;          % Number of bags used in the experiment
+% z_bags = [, , , , , ]; % [m] Opening height of each bag
 % Gondola
-m_g = 190;           % [kg] Mass in DESCENT (gondola + parachute + all extra equipment)
+m_g = 250;           % [kg] Mass in DESCENT (gondola + parachute + all extra equipment)
 A_g = 1.3456;        % [m^2] Bottom area (characteristic value for aerodynamic forces)
 Cd_g = 1.05;         % Drag coefficient (Typical for a cube shape)
 % Parachute
@@ -52,12 +54,17 @@ A_p = 80;            % [m^2] Area
 C = (Cd_p*A_p+Cd_g*A_g)/m_g;     % Dynamic constant
 m_air = (V_min/1000)*d_sealvl;   % [kg] Minimum amount of air to be collected by the bags
 
+M_air = R_ideal/R_spc ; % air molecular mass
+n = m_air/M_air; % number of molecules
+
 %% Processing
 %%------------------- Ascent phase algorithm ------------------------------
 if phase==1
 z(1)=z_ini;       % Height vector definition
 z_i=z_ini;        % auxiliary copy of z variable
 i=1;              % auxiliary value to create the vectors for each variable according to the altitude.
+
+[p_float, T_float, d_float] = US76_Std_atm(z_float); % 1976 US Standard atmosphere
 
 % Initialize counters
 m_counter=0;
@@ -71,7 +78,7 @@ while z_i<=z_float  % Analysis only up to 1000 meters above sea level.
     Qp(i)=1; % [L/min] constant value
     if i>1
         z(i)=z_i;
-        v_th(i)=5.5; % [m/s] aproximately constant
+        v_th(i)=5; % [m/s] aproximately constant
         a_th(i)=0;
         dt(i)=(z(i)-z(i-1))/v_th(i);
         time(i)=time(i-1)+dt(i);
@@ -87,7 +94,7 @@ while z_i<=z_float  % Analysis only up to 1000 meters above sea level.
         % Initialization of dynamic vectors
         dt(1)=0;
         time(1)=0;
-        v_th(1)=5.5;       % Initial descendent velocity
+        v_th(1)=5;       % Initial descendent velocity
         a_th(1)=0;      % Initial hypothetical acceleration
         
 %         p_total(i)=p(i)+(0.5*d(i)*(v_th(i))^2)/100; % [mbar] Dynamic pressure
@@ -118,9 +125,11 @@ while z_i<=z_float  % Analysis only up to 1000 meters above sea level.
     
     % Pressure inside the bags
     p_ext=p(i);
-    p_int=(m_counter*R_spc*T(i)/(bag_volume/1000))/100; % [mbar]
-    dp_bag(i)=abs(p_ext-p_int);
+    p_int= p(i)*V_bag(i)/bag_volume;
+  %  p_int=(m_counter*R_spc*T(i)/(bag_volume/1000))/100; % [mbar]
+    dp_bag(i)=p_int-p_ext;
     dp_max(i)=p_bag_max;
+    dp_float(i)=p_int-p_float;
     
     i=i+1;
     z_i=z(i-1)+2;    % (Meshing) Analysis each 2 meters.
@@ -136,19 +145,22 @@ i=1;               % auxiliary value to create the vectors for each variable acc
 m_counter=0;
 bag_counter=0;
 V_counter=0;
+last_bag=0;
 
 while z_i>=z_end  % Analysis only up to 1000 meters above sea level.
     [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
     V_bag(i) = m_air/d(i)*1000; % [L]
     
-     Qp(i)=1; % [L/min] constant value
+    Qp(i)=3; % [L/min] constant value
     if i>1
         z(i)=z_i;
         [v_th(i),a_th(i),time(i),dt(i)]=free_fall_dynamics(i, z, v_th, a_th, time, d(i), C);
         
-%         p_total(i)=p(i)+(0.5*d(i)*(v_th(i))^2)/100; % [mbar] Dynamic pressure
-%         [Qp(i)]=pump_flowrate(p(i)); % [L/min] flowrate profile depending on pump efficiency  
-        
+%        p_total(i)=p(i)+(0.5*d(i)*(v_th(i))^2)/100; % [mbar] Dynamic pressure
+%        [Qp(i)]=pump_flowrate(p(i)); % [L/min] flowrate profile depending on pump efficiency  
+        if time(i)<(last_bag+flushing_time)
+            Qp(i)=0; % [L/min] constant value
+        end
         V_sample(i)=Qp(i)*dt(i)/60; % [L]
         V_total(i)=V_total(i-1)+V_sample(i); % [L]
         m_sample(i)=(V_sample(i)/1000)*d(i); % [kg]
@@ -181,15 +193,17 @@ while z_i>=z_end  % Analysis only up to 1000 meters above sea level.
 
         bag_z(i)=z_i; % save altitude when each bag is completely filled
         bag_t(i)=time(i); % save time when each bag is completely filled
+        last_bag=time(i); % auxiliary var to introduce flushing time gaps
     else
         bag_z(i)=NaN;
         bag_t(i)=NaN;
     end
 
     % Pressure inside the bags
-    p_ext=p(i);
-    p_int=(m_counter*R_spc*T(i)/(bag_volume/1000))/100; % [mbar]
-    dp_bag(i)=abs(p_ext-p_int);
+    p_ext= p(i);
+    p_int= p(i)*V_bag(i)/bag_volume;
+  %  p_int=(m_counter*R_spc*T(i)/(bag_volume/1000))/100; % [mbar]
+    dp_bag(i)=p_int-p_ext;
     dp_max(i)=p_bag_max;
     
     i=i+1;
@@ -259,11 +273,16 @@ hold off
 
 figure('Name','Pressure profile inside the bags')
 hold on
-plot(dp_bag, z/1000,'b')
+if(phase==1)
+    plot(dp_bag, z/1000,'b')
+    plot(dp_float, z/1000,'g')
+else
+    plot(dp_bag, z/1000,'b')
+end
 plot(dp_max, z/1000,'r')
 xlabel('Pressure [mbar]')
 ylabel('Altitude [km]')
-legend('Sampling Bag Pressure','Maximum Bag Pressure')
+legend('Sampling Bag Pressure','Estimated Pressure at floating','Maximum Bag Pressure')
 hold off
 
 %% Saving the workspace for "pre_graphs.m" main inputs
