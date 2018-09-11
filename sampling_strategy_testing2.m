@@ -9,7 +9,7 @@
 %                      Author: Jordi Coll Ortega
 %                   Lulea University of Technology
 %%-------------------------------------------------------------------------
-%                         Date: 6th September 2018
+%                         Date: 10th September 2018
 %%-------------------------------------------------------------------------
 
 clear all 
@@ -30,6 +30,7 @@ z_float = 26000;       % [m] Float altitude
 t_float = 2.5*3600;    % [sec] Floatting time
 z_cutoff = z_float;    % [m] Cut-off altitude
 z_end = 1000;          % [m] Final height to stop flight simulation
+meshing_step = 2;      % [m] (Meshing) Analysis each 2 meters.
 [p_float, T_float, d_float] = US76_Std_atm(z_float); % 1976 US Standard atmosphere
 
 % Sampling equipment
@@ -40,13 +41,8 @@ flushing_time = 60;  % [sec] Time required to flush the system during flight bef
 
 % Sampling strategy
 num_bags = 6;        % Number of bags used in the experiment
-bag = [1, "asc", 16000, 3;
-       2, "asc", 21000, 3;
-       3, "desc", 22000, 3;
-       4, "desc", 18000, 3;
-       5, "desc", 15000, 3;
-       6, "desc", 12000, 3]; 
-       % Columns: bag number, Phase (asc/desc), Opening altitude [m], Sample volume [L]
+bag_phase = ["asc", "asc", "desc", "desc", "desc", "desc"];
+bag_altitude = [18000, 22000, 24000, 18000, 14000, 10000];
 
 % Gondola
 m_g = 250;           % [kg] Mass in DESCENT (gondola + parachute + all extra equipment)
@@ -56,6 +52,7 @@ Cd_g = 1.05;         % Drag coefficient (Typical for a cube shape)
 Cd_p = 1.75;         % Drag coefficient (Typical for parachutes)
 A_p = 80;            % [m^2] Area
 
+%%-------------------------------------------------------------------------
 C = (Cd_p*A_p+Cd_g*A_g)/m_g;     % Dynamic const1ant
 m_air = (V_min/1000)*d_sealvl;   % [kg] Minimum amount of air to be collected by the bags
 
@@ -67,9 +64,9 @@ dt(1)=0;
 time(1)=0;
 v_th(1)=5;      % Initial vertical velocity
 a_th(1)=0;      % Initial hypothetical acceleration
- 
+
 i=1;            % auxiliary value to create the vectors for each variable according to the altitude.
-% Ascent phase
+%----- Ascent phase -----
 while z_i<z_float
     [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
     if i>1
@@ -80,69 +77,66 @@ while z_i<z_float
     time(i)=time(i-1)+dt(i);
     end
     i=i+1;
-    z_i=z(i-1)+2;    % (Meshing) Analysis each 2 meters.
+    z_i=z(i-1)+meshing_step;
 end
-% Float phase (assumed constant altitude)
+%----- Float phase -----
+%(assumed constant altitude)
 z(i)=z_i;
 time(i)=time(i-1)+t_float;
 v_th(i)=0; 
 a_th(i)=-10*g;
 i=i+1;
-% Descent phase
-while z_i>z_end
+%----- Descent phase -----
+while z_i>=z_end
     [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
     z(i)=z_i;
     [v_th(i),a_th(i),time(i),dt(i)]=free_fall_dynamics(i, z, v_th, a_th, time, d(i), C);
     i=i+1;
-    z_i=z(i-1)-2;    % (Meshing) Analysis each 2 meters.
+    z_i=z(i-1)-meshing_step;    
 end
-
 
 %% Bags sampling
 
-% p_total(i)=p(i)+(0.5*d(i)*(v_th(i))^2)/100; % [mbar] Dynamic pressure
-% [Qp(i)]=pump_flowrate(p_total(i)); % [L/min]
-% V_sample(1)=0;
-% V_total(1)=0;
-% m_sample(1)=0;
-% m_total(1)=0;
-% total_bag_V(1)=0;
-%  
+% complete flush vectors
+for i=1:length(time) 
+    flush_z(i)=NaN;
+    flush_t(i)=NaN;
+end
  
 for j=1:num_bags
 i=1;
 mass_sample=0;      % mass counter
 volume_sample=0;    % volume counter
-dp_sample=0;        % pressure difference counter
+% dp_sample=0;        % pressure difference counter
 
 %------------------- Ascent phase algorithm ------------------------------
-if bag(j,2)=="asc"
-z_i=z(1);
+if bag_phase(j)=="asc"
+z_i=z(i);
     % search opening altitude
-    while bag(j,3)>z_i
+    while bag_altitude(j)>z_i
        [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
-       V_air(i) = m_air/d(i)*1000; % [L]
+%        V_air(i) = m_air/d(i)*1000; % [L]
        bag_z(j,i)=NaN;
        bag_t(j,i)=NaN;
-       flush_z(j,i)=NaN;
-       flush_t(j,i)=NaN;
-       bag_V(j,i)=0; % vacuum in bags assumed before sampling
+       
+       bag_V(j,i)=0; % Assumption: 0 mbar (vacuum) in bags before sampling
        min_sample_V(i)= V_min;
        p_ext=p(i);
-       p_int=p(i)*V_air(i)/bag_V(j,i);
+       p_int=0;
        bag_dp(j,i)= p_int-p_ext;
        max_bag_p(i)= p_bag_max; 
+       
        i=i+1;
        z_i=z(i);
     end
     % rewrite flush variables to introduce the flushing time gap before the sample starts
-    [flush_z(j,i), flush_t(j,i)] = flushing(i, z, time, flush_z, flush_t, flushing_time);
+    [flush_z, flush_t] = flushing(i, z, time, flush_z, flush_t, flushing_time);
     
     % It is considered that the bags will be filled when it has been
     % sampled the minimum mass required to be able to perform the analysis
     % or when the 80% of the volume of the bag is sampled (vendor recommendation).
     % while (bag not full yet) = sampling
-    while (mass_sample<m_air)&&(volume_sample<(0.8*bag_volume)
+    while (mass_sample<m_air)&&(volume_sample<(0.8*bag_volume))
        [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
        V_air(i) = m_air/d(i)*1000; % [L]
        Qp(i)=2; % [L/min] constant value 
@@ -150,44 +144,131 @@ z_i=z(1);
 %        [Qp(i)]=pump_flowrate(p_total(i)); % [L/min] flowrate profile depending on pump efficiency  
        bag_z(j,i)=z(i);
        bag_t(j,i)=time(i);
-       bag_V(j,i)=Qp(i)*dt(i)/60; % [L];
-%       total_bag_V(i)= total_bag_V(i-1)+bag_V(j,i);
+       bag_V_dt(j,i)=Qp(i)*dt(i)/60; % [L];
+       % V2 = (p1/p2)*V1 + dV (altitude volume correction)
+       volume_sample=(p(i-1)/p(i))*volume_sample+bag_V_dt(j,i); % [L]
+       bag_V(j,i)=volume_sample;
+       sample_m_dt(j,i)=bag_V_dt(j,i)/1000*d(i); % [kg]
+       mass_sample=mass_sample+sample_m_dt(j,i);
+       p_ext=p(i);
+       p_int= p(i)*V_air(i)/bag_volume;
+%        p_int=(mass_sample/(bag_volume/1000))*R_spc*T(i);
+       bag_dp(j,i)= p_int-p_ext;
        min_sample_V(i)= V_min;
-       bag_p(j,i)= 1;
        max_bag_p(i)= p_bag_max;
+        
+       i=i+1;
     end
+    time_i=time(i);
     % from closing bag to end of flight    
-    while time_i<time(lenght(time))
+    while time_i<=time(length(time))
        [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
        V_air(i) = m_air/d(i)*1000; % [L]
        bag_z(j,i)=NaN;
        bag_t(j,i)=NaN;
-       bag_V(j,i)= 1;
+       % V2 = (p1/p2)*V1 (altitude volume correction)
+       bag_V(j,i)=(p(i-1)/p(i))*bag_V(j,i-1);
+       p_ext=p(i);
+       p_int= p(i)*V_air(i)/bag_volume;
+%        p_int=(mass_sample/(bag_volume/1000))*R_spc*T(i);
+       bag_dp(j,i)= p_int-p_ext;
+       min_sample_V(i)= V_min;
+       max_bag_p(i)= p_bag_max; 
+       
+       if i==length(time)
+            time_i=time(i)+1;
+       else
+            i=i+1;
+            time_i=time(i);
+       end
+    end    
+% %----------------- Descent phase algorithm -------------------------------
+elseif bag_phase(j)=="desc"
+    % start again from the beginning in case no bags during ascent phase
+    z_i=z(i); 
+    % from start flight to floating phase
+    while z_i<z_float
+       [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
+%        V_air(i) = m_air/d(i)*1000; % [L]
+       bag_z(j,i)=NaN;
+       bag_t(j,i)=NaN;
+       bag_V(j,i)=0; % Assumption: 0 mbar (vacuum) in bags before sampling
        min_sample_V(i)= V_min;
        p_ext=p(i);
-       p_int=p(i)*V_air(i)/bag_V(j,i);
+       p_int=0;
        bag_dp(j,i)= p_int-p_ext;
        max_bag_p(i)= p_bag_max; 
+       
        i=i+1;
-       time_i=time(i);
-    end    
+       z_i=z(i);
+    end
+    % search of opening altitude
+    while z_i>bag_altitude(j)
+       [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
+%        V_air(i) = m_air/d(i)*1000; % [L]
+       bag_z(j,i)=NaN;
+       bag_t(j,i)=NaN;
+       bag_V(j,i)=0; % Assumption: 0 mbar (vacuum) in bags before sampling
+       min_sample_V(i)= V_min;
+       p_ext=p(i);
+       p_int=0;
+       bag_dp(j,i)= p_int-p_ext;
+       max_bag_p(i)= p_bag_max; 
+       
+       i=i+1;
+       z_i=z(i);
+    end
+    % rewrite flush variables to introduce the flushing time gap before the sample starts
+    [flush_z, flush_t] = flushing(i, z, time, flush_z, flush_t, flushing_time);
     
-%----------------- Descent phase algorithm -------------------------------
-elseif bag(j,2)=="desc"
-z_i=z(1);
-    % from start flight to end floating phase
-%     while 
-%         
-%     end
-%     % search of opening altitude
-%     while
-%         
-%     end
-%     % from closing bag to end flight
-%     while
-%         
-%     end
-
+    % while (bag not full yet) = sampling
+    while (mass_sample<m_air)&&(volume_sample<(0.8*bag_volume))
+       [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
+       V_air(i) = m_air/d(i)*1000; % [L]
+       Qp(i)=2; % [L/min] constant value 
+%        p_total(i)=p(i)+(0.5*d(i)*(v_th(i))^2)/100; % [mbar] Dynamic pressure
+%        [Qp(i)]=pump_flowrate(p_total(i)); % [L/min] flowrate profile depending on pump efficiency  
+       bag_z(j,i)=z(i);
+       bag_t(j,i)=time(i);
+       bag_V_dt(j,i)=Qp(i)*dt(i)/60; % [L];
+       % V2 = (p1/p2)*V1 + dV (altitude volume correction)
+       volume_sample=(p(i-1)/p(i))*volume_sample+bag_V_dt(j,i);
+       bag_V(j,i)=volume_sample;
+       sample_m_dt(j,i)=bag_V_dt(j,i)/1000*d(i);
+       mass_sample=mass_sample+sample_m_dt(j,i);
+       p_ext=p(i);
+       p_int= p(i)*V_air(i)/bag_volume;
+%        p_int=(mass_sample/(bag_volume/1000))*R_spc*T(i);
+       bag_dp(j,i)= p_int-p_ext;
+       min_sample_V(i)= V_min;
+       max_bag_p(i)= p_bag_max;
+        
+       i=i+1;
+    end
+    time_i=time(i);
+    % from closing bag to end flight
+    while time_i<=time(length(time))
+       [p(i), T(i), d(i)] = US76_Std_atm(z_i); % 1976 US Standard atmosphere
+       V_air(i) = m_air/d(i)*1000; % [L]
+       bag_z(j,i)=NaN;
+       bag_t(j,i)=NaN;
+       % V2 = (p1/p2)*V1 (altitude volume correction)
+       bag_V(j,i)=(p(i-1)/p(i))*bag_V(j,i-1);
+       p_ext=p(i);
+       p_int= p(i)*V_air(i)/bag_volume;
+%        p_int=(mass_sample/(bag_volume/1000))*R_spc*T(i);
+       bag_dp(j,i)= p_int-p_ext;
+       min_sample_V(i)= V_min;
+       max_bag_p(i)= p_bag_max; 
+       
+       if i==length(time)
+            time_i=time(i)+1;
+       else
+            i=i+1;
+            time_i=time(i);
+       end
+    end
+end
 end
 
 %% Total Volume Calculation
@@ -200,12 +281,12 @@ end
 figure('Name','altitude vs. time')
 hold on
 plot(time/3600, z/1000,'HandleVisibility','off')
-scatter(bag_t(1,:)/3600, bag_z(1,:)/1000,'r','filled') % change color bags
-scatter(bag_t(2,:)/3600, bag_z(2,:)/1000,'r','filled')
-scatter(bag_t(3,:)/3600, bag_z(3,:)/1000,'r','filled')
-scatter(bag_t(4,:)/3600, bag_z(4,:)/1000,'r','filled')
-scatter(bag_t(5,:)/3600, bag_z(5,:)/1000,'r','filled')
-scatter(bag_t(6,:)/3600, bag_z(6,:)/1000,'r','filled')
+scatter(bag_t(1,:)/3600, bag_z(1,:)/1000,'filled') % change color bags
+scatter(bag_t(2,:)/3600, bag_z(2,:)/1000,'filled')
+scatter(bag_t(3,:)/3600, bag_z(3,:)/1000,'filled')
+scatter(bag_t(4,:)/3600, bag_z(4,:)/1000,'filled')
+scatter(bag_t(5,:)/3600, bag_z(5,:)/1000,'filled')
+scatter(bag_t(6,:)/3600, bag_z(6,:)/1000,'filled')
 scatter(flush_t/3600, flush_z/1000,'y','filled')
 xlabel('Time [hours]')
 ylabel('Altitude [km]')
@@ -244,12 +325,12 @@ hold off
 
 figure('Name','Bags pressure difference during flight')
 hold on
-plot(time/3600, bag_p(1,:))
-plot(time/3600, bag_p(2,:))
-plot(time/3600, bag_p(3,:))
-plot(time/3600, bag_p(4,:))
-plot(time/3600, bag_p(5,:))
-plot(time/3600, bag_p(6,:))
+plot(time/3600, bag_dp(1,:))
+plot(time/3600, bag_dp(2,:))
+plot(time/3600, bag_dp(3,:))
+plot(time/3600, bag_dp(4,:))
+plot(time/3600, bag_dp(5,:))
+plot(time/3600, bag_dp(6,:))
 plot(time/3600, max_bag_p)
 xlabel('Time [hours]')
 ylabel('Pressure difference [mbar]')
