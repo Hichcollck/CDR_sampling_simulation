@@ -3,13 +3,13 @@
 %              REXUS/BEXUS 26/27 Programme (SNSB, DLR, ESA)                         
 %%-------------------------------------------------------------------------
 %     Air Sampling Simulator for Balloon Vertical Flight (in Artic Zone)
-%             "BEXUS Air Sampling Simulator (BASS - BEXUS ASS)"
+%                    "BEXUS Air Sampling Simulator"
 %%-------------------------------------------------------------------------           
 %                            TEAM TUBULAR  
 %                      Author: Jordi Coll Ortega
 %                   Lulea University of Technology
 %%-------------------------------------------------------------------------
-%                         Date: 10th September 2018
+%                      Date: 10th September 2018
 %%-------------------------------------------------------------------------
 
 clear all 
